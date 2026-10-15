@@ -1,0 +1,53 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND
+
+part of 'app_settings.dart';
+
+// **************************************************************************
+// TypeAdapterGenerator
+// **************************************************************************
+
+class AppSettingsAdapter extends TypeAdapter<AppSettings> {
+  @override
+  final int typeId = 2;
+
+  @override
+  AppSettings read(BinaryReader reader) {
+    final numOfFields = reader.readByte();
+    final fields = <int, dynamic>{
+      for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
+    };
+    return AppSettings(
+      shopName: (fields[0] as String?) ?? 'MK Star',
+      autoIncrement: (fields[2] as bool?) ?? true,
+      lastBillNumber: (fields[3] as int?) ?? 0,
+      currencySymbol: (fields[4] as String?) ?? '₹',
+      logoImagePath: fields[5] as String?,
+    );
+  }
+
+  @override
+  void write(BinaryWriter writer, AppSettings obj) {
+    writer
+      ..writeByte(5)
+      ..writeByte(0)
+      ..write(obj.shopName)
+      ..writeByte(2)
+      ..write(obj.autoIncrement)
+      ..writeByte(3)
+      ..write(obj.lastBillNumber)
+      ..writeByte(4)
+      ..write(obj.currencySymbol)
+      ..writeByte(5)
+      ..write(obj.logoImagePath);
+  }
+
+  @override
+  int get hashCode => typeId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppSettingsAdapter &&
+          runtimeType == other.runtimeType &&
+          typeId == other.typeId;
+}

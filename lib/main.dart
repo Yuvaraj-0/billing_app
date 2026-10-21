@@ -38,6 +38,7 @@ void main() async {
   await Hive.openBox<Bill>(AppConstants.billsBoxName);
   await Hive.openBox<AppSettings>(AppConstants.settingsBoxName);
   await Hive.openBox(AuthViewModel.authBoxName);
+  await Hive.openBox(AppConstants.packagesBoxName);
 
   // Initialize MongoDB Atlas connection asynchronously in background
   MongoService.instance.init();

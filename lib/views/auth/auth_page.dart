@@ -132,13 +132,11 @@ class _AuthPageState extends State<AuthPage> with SingleTickerProviderStateMixin
                         ],
                       ),
                       child: ClipOval(
-                        child: Padding(
-                          padding: const EdgeInsets.all(8),
-                          child: Image.asset(
-                            'asserts/logo-CWXXw7Ao.png',
-                            fit: BoxFit.contain,
-                            errorBuilder: (ctx, err, stack) =>
-                                const Icon(Icons.star_rounded, color: AppTheme.gold, size: 40),
+                        child: Container(
+                          color: AppTheme.surfaceDark,
+                          child: const Center(
+                            child: Icon(Icons.camera_alt_rounded,
+                                color: AppTheme.gold, size: 40),
                           ),
                         ),
                       ),

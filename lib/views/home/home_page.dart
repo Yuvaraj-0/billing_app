@@ -140,18 +140,14 @@ class _HomePageState extends State<HomePage> {
                                             height: 42,
                                             fit: BoxFit.cover,
                                             errorBuilder: (ctx, err, stack) =>
-                                                Image.asset(
-                                                  'asserts/logo-CWXXw7Ao.png',
-                                                  width: 42,
-                                                  height: 42,
-                                                  fit: BoxFit.contain,
-                                                ),
+                                                const Center(
+                                              child: Icon(Icons.camera_alt_rounded,
+                                                  color: AppTheme.gold, size: 24),
+                                            ),
                                           )
-                                        : Image.asset(
-                                            'asserts/logo-CWXXw7Ao.png',
-                                            width: 42,
-                                            height: 42,
-                                            fit: BoxFit.contain,
+                                        : const Center(
+                                            child: Icon(Icons.camera_alt_rounded,
+                                                color: AppTheme.gold, size: 24),
                                           ),
                                   );
                                 },
@@ -213,7 +209,7 @@ class _HomePageState extends State<HomePage> {
                                     ),
                                     const SizedBox(width: 4),
                                     Text(
-                                      isConnected ? 'MongoDB Synced' : 'Offline Cache',
+                                      isConnected ? 'Cloud Synced' : 'Offline Mode',
                                       style: TextStyle(
                                         color: isConnected ? AppTheme.success : Colors.white38,
                                         fontSize: 10,

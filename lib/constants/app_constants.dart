@@ -9,6 +9,7 @@ class AppConstants {
   // Hive Box Names
   static const String billsBoxName = 'bills';
   static const String settingsBoxName = 'settings';
+  static const String packagesBoxName = 'packages_box';
   static const String settingsKey = 'app_settings';
 
   // GST Rates

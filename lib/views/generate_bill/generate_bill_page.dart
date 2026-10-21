@@ -3,13 +3,14 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme/app_theme.dart';
-import '../../core/constants/app_constants.dart';
 import '../../viewmodels/bill_form_viewmodel.dart';
 import '../../viewmodels/settings_viewmodel.dart';
 import '../../viewmodels/history_viewmodel.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../bill_details/bill_details_page.dart';
 import '../../models/invoice/bill.dart';
+import '../../models/invoice/bill_item.dart';
+import '../../models/package_model.dart';
 import '../../core/utils/currency_formatter.dart';
 
 class GenerateBillPage extends StatefulWidget {
@@ -101,6 +102,170 @@ class _GenerateBillPageState extends State<GenerateBillPage> {
     context.read<BillFormViewModel>().addItem(name, price);
     _itemNameController.clear();
     _itemPriceController.clear();
+  }
+
+  void _onSelectPackage(
+    BuildContext context,
+    BillFormViewModel vm,
+    PackageModel pkg,
+    String symbol,
+  ) {
+    void apply(bool replace) {
+      vm.applyPackage(pkg, replace: replace);
+      if (pkg.comboPrice != null && pkg.comboPrice! > 0) {
+        _comboPriceController.text = pkg.comboPrice!.toStringAsFixed(0);
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded, color: AppTheme.success),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Loaded ${pkg.items.length} items from ${pkg.name}!',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: AppTheme.cardDark,
+        ),
+      );
+    }
+
+    if (vm.items.isNotEmpty) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppTheme.cardDark,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text('Apply "${pkg.name}"?',
+              style: const TextStyle(color: AppTheme.textPrimary)),
+          content: Text(
+            'This package has ${pkg.items.length} items.\n\nWould you like to replace the current items in the bill, or add these items to the existing bill?',
+            style: const TextStyle(color: AppTheme.textSecondary),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel',
+                  style: TextStyle(color: AppTheme.textSecondary)),
+            ),
+            OutlinedButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                apply(false);
+              },
+              style: OutlinedButton.styleFrom(foregroundColor: AppTheme.gold),
+              child: const Text('Add to Bill'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                apply(true);
+              },
+              child: const Text('Replace Items'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      apply(true);
+    }
+  }
+
+  void _showEditItemDialog(
+    BuildContext context,
+    BillFormViewModel vm,
+    int index,
+    BillItem item,
+    String symbol,
+  ) {
+    final nameCtrl = TextEditingController(text: item.itemName);
+    final hasPrice = item.price != null && item.price! > 0;
+    final priceCtrl = TextEditingController(
+        text: hasPrice ? item.price!.toStringAsFixed(0) : '');
+    bool isIncluded = !hasPrice;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: AppTheme.cardDark,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Edit Bill Item',
+              style: TextStyle(color: AppTheme.textPrimary)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameCtrl,
+                  style: const TextStyle(color: AppTheme.textPrimary),
+                  decoration: const InputDecoration(
+                    labelText: 'Item Name *',
+                    prefixIcon: Icon(Icons.camera_enhance_rounded),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (!isIncluded)
+                  TextField(
+                    controller: priceCtrl,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    style: const TextStyle(color: AppTheme.textPrimary),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(
+                          RegExp(r'^\d+\.?\d{0,2}'))
+                    ],
+                    decoration: InputDecoration(
+                      labelText: 'Price ($symbol)',
+                      prefixIcon: const Icon(Icons.currency_rupee_rounded),
+                    ),
+                  ),
+                const SizedBox(height: 10),
+                CheckboxListTile(
+                  title: const Text('Combo Event / Included (No Price)',
+                      style: TextStyle(
+                          color: AppTheme.textPrimary, fontSize: 13)),
+                  value: isIncluded,
+                  activeColor: AppTheme.gold,
+                  contentPadding: EdgeInsets.zero,
+                  onChanged: (val) {
+                    setDialogState(() {
+                      isIncluded = val ?? false;
+                      if (isIncluded) priceCtrl.clear();
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel',
+                  style: TextStyle(color: AppTheme.textSecondary)),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final name = nameCtrl.text.trim();
+                if (name.isEmpty) return;
+                final price = isIncluded
+                    ? null
+                    : double.tryParse(priceCtrl.text.trim());
+                vm.updateItem(index, name, price);
+                Navigator.pop(ctx);
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _generateBill() async {
@@ -225,9 +390,11 @@ class _GenerateBillPageState extends State<GenerateBillPage> {
                                             height: 28,
                                             fit: BoxFit.cover,
                                             errorBuilder: (ctx, err, stack) =>
-                                                Image.asset('asserts/logo-CWXXw7Ao.png', width: 28, height: 28, fit: BoxFit.contain),
+                                                const Icon(Icons.camera_alt_rounded,
+                                                    size: 16, color: AppTheme.gold),
                                           )
-                                        : Image.asset('asserts/logo-CWXXw7Ao.png', width: 28, height: 28, fit: BoxFit.contain),
+                                        : const Icon(Icons.camera_alt_rounded,
+                                            size: 16, color: AppTheme.gold),
                                   ),
                                 );
                               },
@@ -331,32 +498,97 @@ class _GenerateBillPageState extends State<GenerateBillPage> {
 
                     const SizedBox(height: 16),
 
-                    // Service Type
-                    _sectionTitle('Service Type'),
-                    const SizedBox(height: 10),
-                    _SectionCard(
-                      child: Column(
-                        children: AppConstants.serviceTypes.map((type) {
-                          return RadioListTile<String>(
-                            title: Text(type,
-                                style: const TextStyle(
-                                    color: AppTheme.textPrimary, fontSize: 14)),
-                            value: type,
-                            groupValue: vm.serviceType,
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                            fillColor: WidgetStateProperty.resolveWith(
-                              (states) => states.contains(WidgetState.selected)
-                                  ? AppTheme.gold
-                                  : AppTheme.textSecondary,
+                    // Quick Packages Selection
+                    if (settings.packages.isNotEmpty) ...[
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          _sectionTitle('Quick Packages'),
+                          Text(
+                            '1-Tap to Load Items',
+                            style: TextStyle(
+                              color: AppTheme.gold.withValues(alpha: 0.85),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
                             ),
-                            onChanged: (v) => vm.setServiceType(v!),
-                          );
-                        }).toList(),
+                          ),
+                        ],
                       ),
-                    ),
-
-                    const SizedBox(height: 16),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        height: 54,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: settings.packages.length,
+                          separatorBuilder: (_, __) => const SizedBox(width: 8),
+                          itemBuilder: (context, idx) {
+                            final pkg = settings.packages[idx];
+                            final isApplied =
+                                vm.appliedPackageName == pkg.name;
+                            return InkWell(
+                              onTap: () => _onSelectPackage(
+                                  context, vm, pkg, symbol),
+                              borderRadius: BorderRadius.circular(10),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: isApplied
+                                      ? AppTheme.gold.withValues(alpha: 0.2)
+                                      : AppTheme.cardDark,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: isApplied
+                                        ? AppTheme.gold
+                                        : AppTheme.divider,
+                                    width: isApplied ? 1.5 : 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.stars_rounded,
+                                      size: 18,
+                                      color: isApplied
+                                          ? AppTheme.gold
+                                          : AppTheme.teal,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          pkg.name,
+                                          style: TextStyle(
+                                            color: isApplied
+                                                ? AppTheme.gold
+                                                : AppTheme.textPrimary,
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                        Text(
+                                          '${pkg.items.length} items${pkg.comboPrice != null && pkg.comboPrice! > 0 ? ' • ${CurrencyFormatter.formatWithDecimals(pkg.comboPrice!, symbol: symbol)}' : ''}',
+                                          style: const TextStyle(
+                                            color: AppTheme.textSecondary,
+                                            fontSize: 10,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
 
                     // Add Items
                     _sectionTitle('Bill Items & Combo Events'),
@@ -479,10 +711,20 @@ class _GenerateBillPageState extends State<GenerateBillPage> {
                                   ),
                                 ),
                                 IconButton(
+                                  icon: const Icon(Icons.edit_outlined,
+                                      color: AppTheme.gold, size: 20),
+                                  tooltip: 'Edit Item',
+                                  onPressed: () => _showEditItemDialog(
+                                      context, vm, i, item, symbol),
+                                  padding: const EdgeInsets.only(left: 6),
+                                  constraints: const BoxConstraints(),
+                                ),
+                                IconButton(
                                   icon: const Icon(Icons.delete_outline_rounded,
                                       color: AppTheme.error, size: 20),
+                                  tooltip: 'Delete Item',
                                   onPressed: () => vm.removeItem(i),
-                                  padding: const EdgeInsets.only(left: 8),
+                                  padding: const EdgeInsets.only(left: 6),
                                   constraints: const BoxConstraints(),
                                 ),
                               ],

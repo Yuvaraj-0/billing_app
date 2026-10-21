@@ -3,6 +3,7 @@ class AppConstants {
   static const String appSubtitle = 'Photography Services';
   static const String billsBoxName = 'bills';
   static const String settingsBoxName = 'settings';
+  static const String packagesBoxName = 'packages_box';
   static const String settingsKey = 'app_settings';
   static const String currencySymbol = '₹';
   static const String defaultShopName = 'MK Star';

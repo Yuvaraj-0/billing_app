@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/invoice/bill.dart';
 import '../models/invoice/bill_item.dart';
+import '../models/package_model.dart';
 import '../constants/app_constants.dart';
 import '../core/services/mongo_service.dart';
 
@@ -16,6 +17,7 @@ class BillFormViewModel extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
   Bill? _editingBill;
+  String? _appliedPackageName;
 
   List<BillItem> get items => List.unmodifiable(_items);
   String get customerName => _customerName;
@@ -28,6 +30,7 @@ class BillFormViewModel extends ChangeNotifier {
   String? get error => _error;
   bool get isEditing => _editingBill != null;
   Bill? get editingBill => _editingBill;
+  String? get appliedPackageName => _appliedPackageName;
 
   bool get hasComboItems => _items.any((item) => item.price == null || item.price == 0);
   double get individualItemsTotal => _items.fold(0.0, (sum, item) => sum + (item.price ?? 0.0));
@@ -72,8 +75,32 @@ class BillFormViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  void updateItem(int index, String name, double? price) {
+    if (index >= 0 && index < _items.length) {
+      _items[index] = BillItem(itemName: name, price: price);
+      _error = null;
+      notifyListeners();
+    }
+  }
+
   void removeItem(int index) {
     _items.removeAt(index);
+    notifyListeners();
+  }
+
+  void applyPackage(PackageModel package, {bool replace = false}) {
+    if (replace) {
+      _items.clear();
+    }
+    for (final item in package.items) {
+      _items.add(BillItem(itemName: item.itemName, price: item.price));
+    }
+    if (package.comboPrice != null && package.comboPrice! > 0) {
+      _comboPrice = package.comboPrice!;
+    }
+    _serviceType = package.name;
+    _appliedPackageName = package.name;
+    _error = null;
     notifyListeners();
   }
 

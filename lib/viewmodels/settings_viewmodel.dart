@@ -3,17 +3,22 @@ import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:uuid/uuid.dart';
 import '../models/invoice/bill.dart';
 import '../models/app_settings.dart';
+import '../models/package_model.dart';
 import '../constants/app_constants.dart';
 import '../core/services/mongo_service.dart';
 
 class SettingsViewModel extends ChangeNotifier {
   late Box<AppSettings> _settingsBox;
+  late Box _packagesBox;
   AppSettings _settings = AppSettings();
+  List<PackageModel> _packages = [];
   String? _currentUserId;
 
   AppSettings get settings => _settings;
+  List<PackageModel> get packages => List.unmodifiable(_packages);
   String get shopName => _settings.shopName;
   bool get autoIncrement => _settings.autoIncrement;
   String get currencySymbol => _settings.currencySymbol;
@@ -23,6 +28,11 @@ class SettingsViewModel extends ChangeNotifier {
       (_currentUserId != null && _currentUserId!.isNotEmpty)
           ? 'settings_$_currentUserId'
           : AppConstants.settingsKey;
+
+  String get _currentPackagesKey =>
+      (_currentUserId != null && _currentUserId!.isNotEmpty)
+          ? 'packages_$_currentUserId'
+          : 'packages_default';
 
   /// Returns the local logo image file if it exists, null otherwise
   File? get logoFile {
@@ -35,6 +45,7 @@ class SettingsViewModel extends ChangeNotifier {
   Future<void> init({String? userId, String? initialShopName}) async {
     _currentUserId = userId;
     _settingsBox = Hive.box<AppSettings>(AppConstants.settingsBoxName);
+    _packagesBox = Hive.box(AppConstants.packagesBoxName);
 
     final key = _currentSettingsKey;
     var userSettings = _settingsBox.get(key);
@@ -49,25 +60,139 @@ class SettingsViewModel extends ChangeNotifier {
     }
 
     _settings = userSettings;
+
+    // Load user packages from Hive
+    _loadLocalPackages();
+
     notifyListeners();
 
-    // Try fetching latest cloud settings from MongoDB in background for this user
+    // Try fetching latest cloud settings & packages from cloud in background
     _syncFromCloud();
+  }
+
+  void _loadLocalPackages() {
+    final raw = _packagesBox.get(_currentPackagesKey);
+    if (raw != null && raw is List && raw.isNotEmpty) {
+      try {
+        _packages = raw
+            .map((item) {
+              if (item is String) {
+                return PackageModel.fromJson(item);
+              } else if (item is Map) {
+                return PackageModel.fromMap(Map<String, dynamic>.from(item));
+              }
+              return null;
+            })
+            .whereType<PackageModel>()
+            .toList();
+      } catch (e) {
+        debugPrint('[SettingsViewModel] Error parsing packages from Hive: $e');
+        _packages = PackageModel.defaultPackages;
+      }
+    } else {
+      _packages = PackageModel.defaultPackages;
+      _savePackages();
+    }
   }
 
   Future<void> _syncFromCloud() async {
     try {
-      final cloudSettings = await MongoService.instance.getSettings(userId: _currentUserId);
+      final cloudSettings =
+          await MongoService.instance.getSettings(userId: _currentUserId);
       if (cloudSettings != null) {
-        // Preserve local logoImagePath — it's device-local, not from cloud
         final localLogoPath = _settings.logoImagePath;
         _settings = cloudSettings;
         _settings.logoImagePath = localLogoPath;
         await _settingsBox.put(_currentSettingsKey, _settings);
         notifyListeners();
       }
+
+      // Sync packages from cloud
+      final cloudPackages =
+          await MongoService.instance.getPackages(userId: _currentUserId);
+      if (cloudPackages != null && cloudPackages.isNotEmpty) {
+        _packages = cloudPackages;
+        final serialized = _packages.map((p) => p.toMap()).toList();
+        await _packagesBox.put(_currentPackagesKey, serialized);
+        notifyListeners();
+      }
     } catch (_) {}
   }
+
+  Future<void> _savePackages() async {
+    final serialized = _packages.map((p) => p.toMap()).toList();
+    await _packagesBox.put(_currentPackagesKey, serialized);
+    MongoService.instance.savePackages(_packages, userId: _currentUserId);
+    notifyListeners();
+  }
+
+  // ==================== PACKAGE MANAGEMENT ====================
+
+  Future<PackageModel> addPackage(
+    String name, {
+    String? description,
+    double? comboPrice,
+    List<PackageItem>? items,
+  }) async {
+    final newPkg = PackageModel(
+      id: const Uuid().v4(),
+      name: name.trim().isEmpty ? 'Custom Package' : name.trim(),
+      description: description?.trim(),
+      comboPrice: comboPrice,
+      items: items ?? [],
+    );
+    _packages.add(newPkg);
+    await _savePackages();
+    return newPkg;
+  }
+
+  Future<void> updatePackage(PackageModel updatedPackage) async {
+    final index = _packages.indexWhere((p) => p.id == updatedPackage.id);
+    if (index != -1) {
+      _packages[index] = updatedPackage;
+      await _savePackages();
+    }
+  }
+
+  Future<void> deletePackage(String packageId) async {
+    _packages.removeWhere((p) => p.id == packageId);
+    await _savePackages();
+  }
+
+  Future<void> addPackageItem(String packageId, PackageItem item) async {
+    final index = _packages.indexWhere((p) => p.id == packageId);
+    if (index != -1) {
+      _packages[index].items.add(item);
+      await _savePackages();
+    }
+  }
+
+  Future<void> updatePackageItem(
+    String packageId,
+    int itemIndex,
+    PackageItem item,
+  ) async {
+    final index = _packages.indexWhere((p) => p.id == packageId);
+    if (index != -1 && itemIndex >= 0 && itemIndex < _packages[index].items.length) {
+      _packages[index].items[itemIndex] = item;
+      await _savePackages();
+    }
+  }
+
+  Future<void> deletePackageItem(String packageId, int itemIndex) async {
+    final index = _packages.indexWhere((p) => p.id == packageId);
+    if (index != -1 && itemIndex >= 0 && itemIndex < _packages[index].items.length) {
+      _packages[index].items.removeAt(itemIndex);
+      await _savePackages();
+    }
+  }
+
+  Future<void> resetToDefaultPackages() async {
+    _packages = PackageModel.defaultPackages;
+    await _savePackages();
+  }
+
+  // ==================== APP SETTINGS ====================
 
   Future<void> updateShopName(String name) async {
     _settings.shopName = name;
@@ -162,19 +287,23 @@ class SettingsViewModel extends ChangeNotifier {
         .where((b) => _currentUserId == null || b.userId == _currentUserId)
         .toList();
 
-    final jsonList = bills.map((b) => {
-      'billNumber': b.billNumber,
-      'customerName': b.customerName,
-      'customerPhone': b.customerPhone,
-      'serviceType': b.serviceType,
-      'dateTime': b.dateTime.toIso8601String(),
-      'subtotal': b.subtotal,
-      'grandTotal': b.grandTotal,
-      'advancePayment': b.advancePayment,
-      'remainingAmount': b.remainingAmount,
-      'comboPrice': b.comboPrice,
-      'items': b.items.map((i) => {'itemName': i.itemName, 'price': i.price}).toList(),
-    }).toList();
+    final jsonList = bills
+        .map((b) => {
+              'billNumber': b.billNumber,
+              'customerName': b.customerName,
+              'customerPhone': b.customerPhone,
+              'serviceType': b.serviceType,
+              'dateTime': b.dateTime.toIso8601String(),
+              'subtotal': b.subtotal,
+              'grandTotal': b.grandTotal,
+              'advancePayment': b.advancePayment,
+              'remainingAmount': b.remainingAmount,
+              'comboPrice': b.comboPrice,
+              'items': b.items
+                  .map((i) => {'itemName': i.itemName, 'price': i.price})
+                  .toList(),
+            })
+        .toList();
     return jsonList.toString();
   }
 

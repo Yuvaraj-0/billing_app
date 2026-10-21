@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
@@ -23,14 +22,6 @@ class PdfGenerator {
           logoImage = pw.MemoryImage(bytes);
         } catch (_) {}
       }
-    }
-
-    // Fallback to default asset logo
-    if (logoImage == null) {
-      try {
-        final byteData = await rootBundle.load('asserts/logo-CWXXw7Ao.png');
-        logoImage = pw.MemoryImage(byteData.buffer.asUint8List());
-      } catch (_) {}
     }
 
     pdf.addPage(

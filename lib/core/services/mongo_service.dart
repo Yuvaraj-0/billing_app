@@ -5,6 +5,7 @@ import 'package:hive/hive.dart' as hive;
 import 'package:mongo_dart/mongo_dart.dart';
 import '../../models/app_settings.dart';
 import '../../models/invoice/bill.dart';
+import '../../models/package_model.dart';
 import '../../models/user_model.dart';
 
 enum MongoConnectionStatus {
@@ -266,6 +267,69 @@ class MongoService {
     } catch (e) {
       _lastError = e.toString();
       debugPrint('[MongoService] Error fetching settings from MongoDB: $e');
+      return null;
+    }
+  }
+
+  // ==================== PACKAGES (USER-ISOLATED) ====================
+
+  /// Save packages to MongoDB Atlas for a specific user
+  Future<bool> savePackages(List<PackageModel> packages, {String? userId}) async {
+    try {
+      final connected = await _ensureConnection();
+      if (!connected || _db == null) return false;
+
+      final collection = _db!.collection('settings');
+      final data = {
+        'type': 'service_packages',
+        if (userId != null) 'userId': userId,
+        'packages': packages.map((p) => p.toMap()).toList(),
+        'updatedAt': DateTime.now().toIso8601String(),
+      };
+
+      final query = (userId != null && userId.isNotEmpty)
+          ? where.eq('type', 'service_packages').eq('userId', userId)
+          : where.eq('type', 'service_packages');
+
+      await collection.modernUpdate(
+        query,
+        data,
+        upsert: true,
+      );
+
+      debugPrint('[MongoService] Saved packages for user $userId to MongoDB');
+      return true;
+    } catch (e) {
+      _lastError = e.toString();
+      debugPrint('[MongoService] Error saving packages to MongoDB: $e');
+      return false;
+    }
+  }
+
+  /// Fetch packages from MongoDB Atlas for a specific user
+  Future<List<PackageModel>?> getPackages({String? userId}) async {
+    try {
+      final connected = await _ensureConnection();
+      if (!connected || _db == null) return null;
+
+      final collection = _db!.collection('settings');
+      final query = (userId != null && userId.isNotEmpty)
+          ? where.eq('type', 'service_packages').eq('userId', userId)
+          : where.eq('type', 'service_packages');
+
+      final doc = await collection.findOne(query);
+
+      if (doc != null && doc['packages'] != null) {
+        final list = doc['packages'] as List<dynamic>;
+        return list
+            .map((item) =>
+                PackageModel.fromMap(Map<String, dynamic>.from(item as Map)))
+            .toList();
+      }
+      return null;
+    } catch (e) {
+      _lastError = e.toString();
+      debugPrint('[MongoService] Error fetching packages from MongoDB: $e');
       return null;
     }
   }

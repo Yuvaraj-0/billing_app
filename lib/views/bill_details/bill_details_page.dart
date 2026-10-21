@@ -284,18 +284,14 @@ class _BillDetailsPageState extends State<BillDetailsPage> {
                                       height: 60,
                                       fit: BoxFit.cover,
                                       errorBuilder: (ctx, err, stack) =>
-                                          Image.asset(
-                                            'asserts/logo-CWXXw7Ao.png',
-                                            width: 60,
-                                            height: 60,
-                                            fit: BoxFit.contain,
-                                          ),
+                                          const Center(
+                                        child: Icon(Icons.camera_alt_rounded,
+                                            size: 28, color: AppTheme.gold),
+                                      ),
                                     )
-                                  : Image.asset(
-                                      'asserts/logo-CWXXw7Ao.png',
-                                      width: 60,
-                                      height: 60,
-                                      fit: BoxFit.contain,
+                                  : const Center(
+                                      child: Icon(Icons.camera_alt_rounded,
+                                          size: 28, color: AppTheme.gold),
                                     ),
                             ),
                           );
